@@ -1,0 +1,36 @@
+modules:
+  image harmony:
+    input args:
+      SourceType: hikvision
+      DeviceAddress: '192.168.1.10'
+      UserName: admin
+      Password: Scu50501
+      Port: '8000'
+    output args:
+      - LoaderArgsHash
+  target detection:
+    input args:
+      Weight: yolov5s.pt
+      Device: cuda:0
+      LoaderArgsHash: "{LoaderArgsHash}"
+    output args:
+  image renderer:
+    input args:
+    output args:
+
+
+connections:
+  -
+    cur: image renderer
+    pre: image harmony
+    args:
+      LoaderArgsHash: "{LoaderArgsHash}"
+  -
+    cur: image renderer
+    pre: target detection
+    args:
+  -
+    cur: target detection
+    pre: image harmony
+    args:
+      LoaderArgsHash: "{LoaderArgsHash}"
