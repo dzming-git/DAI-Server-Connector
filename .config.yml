@@ -3,7 +3,8 @@ service:
   port: 5000
   tags: 
     - interface:gRPC
+    - interface:REST
 
 consul:
-  ip: 10.0.0.2
+  ip: 10.10.10.2
   port: 8500
