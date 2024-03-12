@@ -42,7 +42,7 @@ def video_play(task_id):
         response = get_image_by_image_id_response.response
         if 200 != response.code:
             print(f'{response.code}: {response.message}')
-            return None
+            continue
         image_id = get_image_by_image_id_response.imageResponse.imageId
         buffer = get_image_by_image_id_response.imageResponse.buffer
         if not buffer:
