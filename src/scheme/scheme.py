@@ -40,7 +40,7 @@ class SchemeManager:
             self.clients[module] = ServiceCoordinatorClient(ip, port)
         
         for module in modules:
-            print(scheme['modules'][module])
+            print(f"{module}: {scheme['modules'][module]}")
             service_coordinator_client = self.clients[module]
             request = service_coordinator_client.InformCurrentServiceInfoRequest()
             request.args.clear()
