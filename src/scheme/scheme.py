@@ -32,6 +32,7 @@ class SchemeManager:
     def connect(self):
         scheme = self.read_scheme()
         modules = scheme['modules'].keys()
+        connections = scheme['connections']
         output_args = {}
         
         for module in modules:
@@ -39,8 +40,9 @@ class SchemeManager:
             self.service_address[module] = [ip, port]
             self.clients[module] = ServiceCoordinatorClient(ip, port)
         
+        # init
         for module in modules:
-            print(f"{module}: {scheme['modules'][module]}")
+            print(f"init {module}: {scheme['modules'][module]}")
             service_coordinator_client = self.clients[module]
             request = service_coordinator_client.InformCurrentServiceInfoRequest()
             request.args.clear()
@@ -53,16 +55,16 @@ class SchemeManager:
                     request.args[key] = value
             response = service_coordinator_client.informCurrentServiceInfo(request)
             if response.response.code != 200:
-                return False, response.response.message
+                return False, f'module: {module} init failed.\n{response.response.message}'
             output_arg_keys = scheme['modules'][module]['output args']
             if output_arg_keys:
                 for output_arg_key in output_arg_keys:
                     if output_arg_key in response.args:
                         output_args[output_arg_key] = response.args[output_arg_key]
         
-        connections = scheme['connections']
+        # connect
         for connection in connections:
-            print(connection)
+            print(f"connect {connection['pre']} -> {connection['cur']}\nargs: {connection['args']}")
             service_coordinator_client = self.clients[connection['cur']]
             request = service_coordinator_client.InformPreviousServiceInfoRequest()
             request.args.clear()
@@ -88,5 +90,19 @@ class SchemeManager:
             response = service_coordinator_client.start(request)
             if response.response.code != 200:
                 return False, response.response.message
-            
+        return True, 'OK'
+    
+    def stop(self):
+        scheme = self.read_scheme()
+        modules = scheme['modules'].keys()
+
+        for module in modules:
+            print(f"stop {module}: {scheme['modules'][module]}")
+            service_coordinator_client = self.clients[module]
+            request = service_coordinator_client.StopRequest()
+            request.task_id = self.task_id
+            response = service_coordinator_client.stop(request)
+            if response.response.code != 200:
+                return False, response.response.message
+    
 schemes_dict : Dict[int, SchemeManager] = {}

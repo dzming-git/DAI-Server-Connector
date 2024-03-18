@@ -19,7 +19,8 @@ def scheme_start(task_id: int):
         scheme_file = f'schemes/{task_id}.yml'
         scheme = SchemeManager(scheme_file)
         schemes_dict[task_id] = scheme
-        scheme.connect()
+        connect_success, msg = scheme.connect()
+        assert connect_success, msg
         video_renderer_address = scheme.service_address['image renderer']
         options = [('grpc.max_receive_message_length', 1024 * 1024 * 1024)]
         image_renderer_conn = grpc.insecure_channel(f'{video_renderer_address[0]}:{video_renderer_address[1]}', options=options)
@@ -27,7 +28,17 @@ def scheme_start(task_id: int):
         return 'OK'
     except:
         return traceback.format_exc()
-    
+
+@app.route('/scheme/stop/<int:task_id>')
+def scheme_stop(task_id: int):
+    try:
+        scheme = schemes_dict[task_id]
+        scheme.stop()
+        image_renderer_clients_dict.pop(task_id)
+        return 'OK'
+    except:
+        return traceback.format_exc()
+
 def video_play(task_id):
     while 1:
         get_image_by_image_id_request = image_renderer_pb2.GetImageByImageIdRequest()
@@ -38,6 +49,7 @@ def video_play(task_id):
         get_image_by_image_id_request.imageRequest.params.extend([cv2.IMWRITE_JPEG_QUALITY, QUALITY])
         get_image_by_image_id_request.imageRequest.imageId = 0  # 最新
         
+        assert task_id in image_renderer_clients_dict, f"task id {task_id} not found"
         get_image_by_image_id_response = image_renderer_clients_dict[task_id].getImageByImageId(get_image_by_image_id_request)
         response = get_image_by_image_id_response.response
         if 200 != response.code:
