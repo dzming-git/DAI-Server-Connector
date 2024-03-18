@@ -15,6 +15,7 @@ image_renderer_clients_dict : Dict[int, image_renderer_pb2_grpc.CommunicateStub]
 
 @app.route('/scheme/start/<int:task_id>')
 def scheme_start(task_id: int):
+    scheme = None
     try:
         scheme_file = f'schemes/{task_id}.yml'
         scheme = SchemeManager(scheme_file)
@@ -27,6 +28,8 @@ def scheme_start(task_id: int):
         image_renderer_clients_dict[task_id] = image_renderer_pb2_grpc.CommunicateStub(channel=image_renderer_conn)
         return 'OK'
     except:
+        if scheme is not None:
+            scheme.stop()
         return traceback.format_exc()
 
 @app.route('/scheme/stop/<int:task_id>')
@@ -34,7 +37,8 @@ def scheme_stop(task_id: int):
     try:
         scheme = schemes_dict[task_id]
         scheme.stop()
-        image_renderer_clients_dict.pop(task_id)
+        if task_id in image_renderer_clients_dict:
+            image_renderer_clients_dict.pop(task_id)
         return 'OK'
     except:
         return traceback.format_exc()
