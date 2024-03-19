@@ -44,6 +44,7 @@ def scheme_stop(task_id: int):
         return traceback.format_exc()
 
 def video_play(task_id):
+    previous_image_id = None  # 初始化前一个image_id为None
     while 1:
         get_image_by_image_id_request = image_renderer_pb2.GetImageByImageIdRequest()
         get_image_by_image_id_request.taskId = int(task_id)
@@ -60,12 +61,17 @@ def video_play(task_id):
             print(f'{response.code}: {response.message}')
             continue
         image_id = get_image_by_image_id_response.imageResponse.imageId
+        # 如果连续两次获取到的image_id相同，则结束循环
+        if image_id == previous_image_id:
+            break
+        previous_image_id = image_id  # 更新前一个image_id为当前获取到的image_id
         buffer = get_image_by_image_id_response.imageResponse.buffer
         if not buffer:
             continue
         # 使用生成器（generator）输出图像帧
         yield (b'--frame\r\n'
                b'Content-Type: image/jpeg\r\n\r\n' + buffer + b'\r\n')
+    scheme_stop(task_id)
 
 @app.route('/scheme/video/<int:task_id>')
 def video_feed(task_id):
