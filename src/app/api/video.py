@@ -5,13 +5,9 @@ import cv2
 import traceback
 from src.scheme.scheme import SchemeManager, schemes_dict
 from flask import request, jsonify, request, Response
-from generated.protos.image_renderer import image_renderer_pb2, image_renderer_pb2_grpc
+from src.grpc.clients.image_renderer.image_renderer_client import ImageRendererClient
 
-QUALITY = 80
-W = 640
-H = 360
-
-image_renderer_clients_dict : Dict[int, image_renderer_pb2_grpc.CommunicateStub] = {}
+image_renderer_clients_dict : Dict[int, ImageRendererClient] = {}
 
 @app.route('/scheme/start/<int:task_id>')
 def scheme_start(task_id: int):
@@ -23,9 +19,7 @@ def scheme_start(task_id: int):
         connect_success, msg = scheme.connect()
         assert connect_success, msg
         video_renderer_address = scheme.service_address['image renderer']
-        options = [('grpc.max_receive_message_length', 1024 * 1024 * 1024)]
-        image_renderer_conn = grpc.insecure_channel(f'{video_renderer_address[0]}:{video_renderer_address[1]}', options=options)
-        image_renderer_clients_dict[task_id] = image_renderer_pb2_grpc.CommunicateStub(channel=image_renderer_conn)
+        image_renderer_clients_dict[task_id] = ImageRendererClient(video_renderer_address[0], video_renderer_address[1])
         return 'OK'
     except:
         if scheme is not None:
@@ -43,37 +37,41 @@ def scheme_stop(task_id: int):
     except:
         return traceback.format_exc()
 
-def video_play(task_id):
+def video_play(task_id: int):
     previous_image_id = None  # 初始化前一个image_id为None
+    same_id_count = 0  # 初始化连续相同图像ID的计数器为0
     while 1:
-        get_image_by_image_id_request = image_renderer_pb2.GetImageByImageIdRequest()
-        get_image_by_image_id_request.taskId = int(task_id)
-        get_image_by_image_id_request.imageRequest.format = '.jpg'
-        get_image_by_image_id_request.imageRequest.expectedW = W
-        get_image_by_image_id_request.imageRequest.expectedH = H
-        get_image_by_image_id_request.imageRequest.params.extend([cv2.IMWRITE_JPEG_QUALITY, QUALITY])
-        get_image_by_image_id_request.imageRequest.imageId = 0  # 最新
+        request = ImageRendererClient.GetImageByImageIdRequest()
+        request.task_id = task_id
         
         assert task_id in image_renderer_clients_dict, f"task id {task_id} not found"
-        get_image_by_image_id_response = image_renderer_clients_dict[task_id].getImageByImageId(get_image_by_image_id_request)
-        response = get_image_by_image_id_response.response
-        if 200 != response.code:
-            print(f'{response.code}: {response.message}')
+        response = image_renderer_clients_dict[task_id].getImageByImageId(request)
+        custom_response = response.response
+        if 200 != custom_response.code:
+            print(f'{custom_response.code}: {custom_response.message}')
             continue
-        image_id = get_image_by_image_id_response.imageResponse.imageId
-        # 如果连续两次获取到的image_id相同，则结束循环
+        image_id = response.custom_image_response.image_id
+        # 如果连续两次获取到的image_id相同，则计数器增加，否则重置计数器
         if image_id == previous_image_id:
-            break
+            same_id_count += 1
+            # 如果连续10次获取到的image_id相同，则结束循环
+            if same_id_count >= 10:
+                break
+            continue
+        else:
+            same_id_count = 0  # 重置计数器
         previous_image_id = image_id  # 更新前一个image_id为当前获取到的image_id
-        buffer = get_image_by_image_id_response.imageResponse.buffer
+        buffer = response.custom_image_response.buffer
         if not buffer:
             continue
         # 使用生成器（generator）输出图像帧
         yield (b'--frame\r\n'
                b'Content-Type: image/jpeg\r\n\r\n' + buffer + b'\r\n')
+
     scheme_stop(task_id)
 
+
 @app.route('/scheme/video/<int:task_id>')
-def video_feed(task_id):
+def video_feed(task_id: int):
     return Response(video_play(task_id),
                     mimetype='multipart/x-mixed-replace; boundary=frame')
