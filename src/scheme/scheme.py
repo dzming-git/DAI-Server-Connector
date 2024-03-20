@@ -22,7 +22,7 @@ class SchemeManager:
         self.consul_client.consul_ip = config.consul_ip
         self.consul_client.consul_port = config.consul_port
         
-        self.service_address = {}
+        self.service_address: Dict[int, Tuple[str, int]] = {}
         self.clients = {}
 
     def read_scheme(self):
@@ -40,7 +40,7 @@ class SchemeManager:
         def find_module(module: str) -> Tuple[bool, str]:
             try:
                 ip, port = self.consul_client.get_service_address(module)
-                self.service_address[module] = [ip, port]
+                self.service_address[module] = (ip, port)
                 self.clients[module] = ServiceCoordinatorClient(ip, port)
                 return True, 'OK'
             except Exception:

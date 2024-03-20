@@ -37,7 +37,7 @@ class ServiceCoordinatorClient:
     class StopResponse:
         response: 'ServiceCoordinatorClient.CustomResponse' = None
     
-    def __init__(self, ip:str, port: str):
+    def __init__(self, ip:str, port: int):
         self.conn = grpc.insecure_channel(f'{ip}:{port}')
         self.client = service_coordinator_pb2_grpc.CommunicateStub(channel=self.conn)
     
