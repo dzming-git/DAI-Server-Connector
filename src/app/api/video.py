@@ -41,16 +41,10 @@ def video_play(task_id: int):
     previous_image_id = None  # 初始化前一个image_id为None
     same_id_count = 0  # 初始化连续相同图像ID的计数器为0
     while 1:
-        request = ImageRendererClient.GetImageByImageIdRequest()
-        request.task_id = task_id
-        
         assert task_id in image_renderer_clients_dict, f"task id {task_id} not found"
-        response = image_renderer_clients_dict[task_id].getImageByImageId(request)
-        custom_response = response.response
-        if 200 != custom_response.code:
-            print(f'{custom_response.code}: {custom_response.message}')
+        image_id, buffer = image_renderer_clients_dict[task_id].get_image_buffer_by_image_id(task_id, 0, 640, 360)
+        if 0 == image_id:
             continue
-        image_id = response.custom_image_response.image_id
         # 如果连续两次获取到的image_id相同，则计数器增加，否则重置计数器
         if image_id == previous_image_id:
             same_id_count += 1
@@ -61,7 +55,6 @@ def video_play(task_id: int):
         else:
             same_id_count = 0  # 重置计数器
         previous_image_id = image_id  # 更新前一个image_id为当前获取到的image_id
-        buffer = response.custom_image_response.buffer
         if not buffer:
             continue
         # 使用生成器（generator）输出图像帧

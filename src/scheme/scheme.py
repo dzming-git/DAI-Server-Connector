@@ -23,7 +23,7 @@ class SchemeManager:
         self.consul_client.consul_port = config.consul_port
         
         self.service_address: Dict[int, Tuple[str, int]] = {}
-        self.clients = {}
+        self.clients: Dict[str, ServiceCoordinatorClient] = {}
 
     def read_scheme(self):
         with open(self.scheme_file, 'r') as file:
@@ -35,7 +35,7 @@ class SchemeManager:
         scheme = self.read_scheme()
         modules = scheme['modules'].keys()
         connections = scheme['connections']
-        output_args = {}
+        args_global = {}
         
         def find_module(module: str) -> Tuple[bool, str]:
             try:
@@ -50,22 +50,19 @@ class SchemeManager:
             try:
                 print(f"init {module}: {scheme['modules'][module]}")
                 service_coordinator_client = self.clients[module]
-                request = service_coordinator_client.InformCurrentServiceInfoRequest()
-                request.args.clear()
-                request.task_id = self.task_id
-                input_args = scheme['modules'][module]['input args']
+                input_args: Dict[str, str] = scheme['modules'][module]['input args']
                 if input_args:
                     for key, value in input_args.items():
                         if value.startswith('{') and value.endswith('}'):
-                            value = output_args[value[1:-1]]
-                        request.args[key] = value
-                response = service_coordinator_client.informCurrentServiceInfo(request)
-                assert response.response.code == 200, response.response.message
-                output_arg_keys = scheme['modules'][module]['output args']
-                if output_arg_keys:
-                    for output_arg_key in output_arg_keys:
-                        if output_arg_key in response.args:
-                            output_args[output_arg_key] = response.args[output_arg_key]
+                            value = args_global[value[1:-1]]
+                        input_args[key] = value
+                ok, args_output = service_coordinator_client.inform_current_service_info(self.task_id, input_args)
+                assert ok, ''
+                keys = scheme['modules'][module]['output args']
+                if keys:
+                    for key in keys:
+                        if key in args_output:
+                            args_global[key] = args_output[key]
                 return True, 'OK'
             except Exception:
                 return False, f'init module {module} failed.\n{traceback.format_exc()}'
@@ -74,20 +71,20 @@ class SchemeManager:
             try:
                 print(f"connect {connection['pre']} -> {connection['cur']}\nargs: {connection['args']}")
                 service_coordinator_client = self.clients[connection['cur']]
-                request = service_coordinator_client.InformPreviousServiceInfoRequest()
-                request.args.clear()
-                request.task_id = self.task_id
-                request.pre_service_name = connection['pre']
-                request.pre_service_ip = self.service_address[connection['pre']][0]
-                request.pre_service_port = self.service_address[connection['pre']][1]
-                connection_args = connection['args']
+                connection_args: Dict[str, str] = connection['args']
                 if connection_args:
                     for key, value in connection_args.items():
                         if value.startswith('{') and value.endswith('}'):
-                            value = output_args[value[1:-1]]
-                        request.args[key] = value
-                response = service_coordinator_client.informPreviousServiceInfo(request)
-                assert response.response.code == 200, response.response.message
+                            value = args_global[value[1:-1]]
+                        connection_args[key] = value
+                ok = service_coordinator_client.inform_previous_service_info(
+                    task_id=self.task_id,
+                    pre_service_name=connection['pre'],
+                    pre_service_ip=self.service_address[connection['pre']][0],
+                    pre_service_port=self.service_address[connection['pre']][1],
+                    args=connection_args
+                )
+                assert ok, ''
                 return True, 'OK'
             except Exception:
                 return False, f"connect module {connection['pre']} -> {connection['cur']} failed.\n{traceback.format_exc()}"
@@ -96,10 +93,7 @@ class SchemeManager:
             try:
                 print(f'start {module}')
                 service_coordinator_client = self.clients[module]
-                request = service_coordinator_client.StartRequest()
-                request.task_id = self.task_id
-                response = service_coordinator_client.start(request)
-                assert response.response.code == 200, response.response.message
+                assert service_coordinator_client.start(self.task_id), ''
                 return True, 'OK'
             except Exception:
                 return False, f"connect module {connection['pre']} -> {connection['cur']} failed.\n{traceback.format_exc()}"
@@ -162,10 +156,7 @@ class SchemeManager:
             try:
                 print(f"stop {module}: {scheme['modules'][module]}")
                 service_coordinator_client = self.clients[module]
-                request = service_coordinator_client.StopRequest()
-                request.task_id = self.task_id
-                response = service_coordinator_client.stop(request)
-                assert response.response.code == 200, response.response.message
+                assert service_coordinator_client.stop(self.task_id), ''
                 return True, 'OK'
             except Exception:
                 return False, f"stop module {module} failed.\n{traceback.format_exc()}"
