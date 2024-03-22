@@ -16,15 +16,25 @@ def scheme_start(task_id: int):
         scheme_file = f'schemes/{task_id}.yml'
         scheme = SchemeManager(scheme_file)
         schemes_dict[task_id] = scheme
-        connect_success, msg = scheme.connect()
-        assert connect_success, msg
+        scheme.connect()
         video_renderer_address = scheme.service_address['image renderer']
         image_renderer_clients_dict[task_id] = ImageRendererClient(video_renderer_address[0], video_renderer_address[1])
         return 'OK'
-    except:
-        if scheme is not None:
-            scheme.stop()
-        return traceback.format_exc()
+    except Exception as e:
+        start_err = '\n'.join([
+            f'strat task {task_id} error:',
+            str(e)
+        ])
+        try:
+            if scheme is not None:
+                scheme.stop()
+        except Exception as e:
+            stop_err = '\n'.join([
+                f'stop task {task_id} error:',
+                str(e)
+            ])
+        error = '\n'.join([start_err, stop_err])
+        return Response(f"<pre>{error}</pre>", mimetype='text/html')
 
 @app.route('/scheme/stop/<int:task_id>')
 def scheme_stop(task_id: int):
@@ -34,8 +44,13 @@ def scheme_stop(task_id: int):
         if task_id in image_renderer_clients_dict:
             image_renderer_clients_dict.pop(task_id)
         return 'OK'
-    except:
-        return traceback.format_exc()
+    except Exception as e:
+        stop_err = '\n'.join([
+            f'stop task {task_id} error:',
+            str(e)
+        ])
+        return Response(f"<pre>{stop_err}</pre>", mimetype='text/html')
+
 
 def video_play(task_id: int):
     previous_image_id = None  # 初始化前一个image_id为None
